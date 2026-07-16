@@ -9,6 +9,8 @@ import { useAuthStore } from "@/store/authStore";
 import { api } from "@/lib/api";
 import Link from "next/link";
 import { Mail, Lock, Eye, EyeOff, Loader2, Sparkles } from "lucide-react";
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
+
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -171,6 +173,73 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-800"></div>
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-[#0f172a] px-2 text-slate-500">
+              Or continue with
+            </span>
+          </div>
+        </div>
+
+        <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "mock-google-client-id-beautyflow-2026"}>
+          <div className="flex flex-col gap-3 justify-center items-center">
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                if (credentialResponse.credential) {
+                  setIsLoading(true);
+                  setError(null);
+                  try {
+                    const response = await api.post("/api/v1/auth/google", {
+                      idToken: credentialResponse.credential,
+                    });
+                    const { accessToken, refreshToken, user } = response.data.data;
+                    setAuth(user, accessToken, refreshToken);
+                    router.push("/dashboard");
+                  } catch (err: any) {
+                    setError(err.response?.data?.message || "Google authentication failed");
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }
+              }}
+              onError={() => {
+                setError("Google Sign-In failed. Please try again.");
+              }}
+              theme="dark"
+              shape="pill"
+              text="signin_with"
+              width="320"
+            />
+            
+            {/* Developer/Testing Mock Button */}
+            <button
+              onClick={async () => {
+                setIsLoading(true);
+                setError(null);
+                try {
+                  const response = await api.post("/api/v1/auth/google", {
+                    idToken: "mock-kanak",
+                  });
+                  const { accessToken, refreshToken, user } = response.data.data;
+                  setAuth(user, accessToken, refreshToken);
+                  router.push("/dashboard");
+                } catch (err: any) {
+                  setError(err.response?.data?.message || "Mock Google authentication failed");
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              className="mt-2 w-[320px] py-2 bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-white rounded-full text-xs font-semibold border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-center gap-2 shadow-inner"
+            >
+              <Sparkles className="h-3 w-3 text-rose-500" />
+              Test Google Login (Mock User)
+            </button>
+          </div>
+        </GoogleOAuthProvider>
 
         <div className="mt-8 text-center text-sm text-slate-400">
           Don&apos;t have an account?{" "}

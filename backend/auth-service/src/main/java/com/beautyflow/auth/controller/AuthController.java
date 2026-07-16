@@ -46,4 +46,10 @@ public class AuthController {
         }
         return ResponseEntity.badRequest().body(ApiResponse.success("Failed to verify account / already verified"));
     }
+
+    @PostMapping("/google")
+    public ResponseEntity<ApiResponse<AuthResponse>> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        AuthResponse response = authService.loginGoogle(request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Google authentication successful"));
+    }
 }

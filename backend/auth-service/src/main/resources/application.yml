@@ -5,7 +5,7 @@ spring:
   application:
     name: auth-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/beautyflow_auth
+    url: jdbc:postgresql://localhost:5439/beautyflow_auth
     username: beautyflow_admin
     password: admin_password_secure_2026
     driver-class-name: org.postgresql.Driver
@@ -21,9 +21,22 @@ spring:
     redis:
       host: localhost
       port: 6379
+  mail:
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:beautyflow.verify@gmail.com}
+    password: ${SPRING_MAIL_PASSWORD:mock_password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 beautyflow:
   jwt:
     secret: dGhlLXNlY3JldC1rZXktZm9yLWJlYXV0eWZsb3ctc2Fhcy0yMDI2LW11c3QtYmUtbGFyZ2UtZW5vdWdoLXRvLWJlLXNhZmU=
     expiration-ms: 86400000 # 24 Hours
     refresh-expiration-ms: 604800000 # 7 Days
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:mock-google-client-id-beautyflow-2026}

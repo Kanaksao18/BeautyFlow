@@ -33,6 +33,10 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
     private final StringRedisTemplate redisTemplate;
+    private final EmailService emailService;
+
+    @org.springframework.beans.factory.annotation.Value("${beautyflow.google.client-id}")
+    private String googleClientId;
 
     @Override
     @Transactional
@@ -59,7 +63,9 @@ public class AuthServiceImpl implements AuthService {
         
         log.info("--- [BEAUTYFLOW Verification OTP for {}: {}] ---", user.getEmail(), otp);
 
-        // For MVP, we return a response. In production, we'd send an email/SMS.
+        // Send real email in background
+        emailService.sendVerificationEmail(user.getEmail(), otp);
+
         String token = jwtUtils.generateToken(user.getEmail(), user.getRole().name());
         String refreshToken = jwtUtils.generateRefreshToken(user.getEmail());
 
@@ -156,5 +162,87 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         return UserMapper.toDto(user);
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse loginGoogle(GoogleLoginRequest request) {
+        String email;
+        String firstName = "Google";
+        String lastName = "User";
+        String pictureUrl = null;
+
+        // Dev/Test Fallback for mock tokens
+        if (request.getIdToken().startsWith("mock-")) {
+            email = request.getIdToken().replace("mock-", "").trim() + "@gmail.com";
+            firstName = "Mock";
+            lastName = "GoogleUser";
+        } else {
+            // Real Google ID Token Verification
+            try {
+                com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier verifier = 
+                    new com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier.Builder(
+                        new com.google.api.client.http.javanet.NetHttpTransport(), 
+                        new com.google.api.client.json.gson.GsonFactory())
+                    .setAudience(java.util.Collections.singletonList(googleClientId))
+                    .build();
+
+                com.google.api.client.googleapis.auth.oauth2.GoogleIdToken idToken = verifier.verify(request.getIdToken());
+                if (idToken == null) {
+                    throw new BadRequestException("Invalid Google ID Token");
+                }
+
+                com.google.api.client.googleapis.auth.oauth2.GoogleIdToken.Payload payload = idToken.getPayload();
+                email = payload.getEmail();
+                firstName = (String) payload.get("given_name");
+                lastName = (String) payload.get("family_name");
+                pictureUrl = (String) payload.get("picture");
+            } catch (Exception e) {
+                log.error("Google authentication failed: {}", e.getMessage());
+                throw new BadRequestException("Google Authentication validation error: " + e.getMessage());
+            }
+        }
+
+        // Get or Create User
+        User user = userRepository.findByEmail(email).orElse(null);
+
+        if (user == null) {
+            user = User.builder()
+                    .email(email)
+                    .passwordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString())) // Random password
+                    .firstName(firstName != null ? firstName : "Google")
+                    .lastName(lastName != null ? lastName : "User")
+                    .role(Role.CUSTOMER) // Default to customer
+                    .status(UserStatus.ACTIVE) // Automatically active verified Google user
+                    .avatarUrl(pictureUrl)
+                    .build();
+            userRepository.save(user);
+
+            // Automatically create Wallet for the new active user
+            Wallet wallet = Wallet.builder()
+                    .user(user)
+                    .balance(BigDecimal.ZERO)
+                    .currency("INR")
+                    .build();
+            walletRepository.save(wallet);
+            log.info("Registered new Google OAuth user: {}", email);
+        } else {
+            if (user.getStatus() == UserStatus.SUSPENDED) {
+                throw new UnauthorizedException("Your account has been suspended.");
+            }
+            if (user.getStatus() == UserStatus.PENDING) {
+                user.setStatus(UserStatus.ACTIVE);
+                userRepository.save(user);
+            }
+        }
+
+        String token = jwtUtils.generateToken(user.getEmail(), user.getRole().name());
+        String refreshToken = jwtUtils.generateRefreshToken(user.getEmail());
+
+        return AuthResponse.builder()
+                .accessToken(token)
+                .refreshToken(refreshToken)
+                .user(UserMapper.toDto(user))
+                .build();
     }
 }
