@@ -1,0 +1,14 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: artist-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/beautyflow_artist
+    username: beautyflow_admin
+    password: admin_password_secure_2026
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update

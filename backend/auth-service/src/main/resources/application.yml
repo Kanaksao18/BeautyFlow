@@ -1,0 +1,29 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: auth-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/beautyflow_auth
+    username: beautyflow_admin
+    password: admin_password_secure_2026
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+beautyflow:
+  jwt:
+    secret: dGhlLXNlY3JldC1rZXktZm9yLWJlYXV0eWZsb3ctc2Fhcy0yMDI2LW11c3QtYmUtbGFyZ2UtZW5vdWdoLXRvLWJlLXNhZmU=
+    expiration-ms: 86400000 # 24 Hours
+    refresh-expiration-ms: 604800000 # 7 Days
