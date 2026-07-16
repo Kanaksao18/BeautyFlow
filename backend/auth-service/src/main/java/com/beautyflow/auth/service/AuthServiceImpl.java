@@ -34,6 +34,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtUtils jwtUtils;
     private final StringRedisTemplate redisTemplate;
     private final EmailService emailService;
+    private final SmsService smsService;
 
     @org.springframework.beans.factory.annotation.Value("${beautyflow.google.client-id}")
     private String googleClientId;
@@ -57,14 +58,20 @@ public class AuthServiceImpl implements AuthService {
 
         userRepository.save(user);
 
-        // Generate OTP
-        String otp = String.format("%06d", new Random().nextInt(1000000));
-        redisTemplate.opsForValue().set("otp:" + user.getEmail(), otp, Duration.ofMinutes(10));
-        
-        log.info("--- [BEAUTYFLOW Verification OTP for {}: {}] ---", user.getEmail(), otp);
+        // Generate separate Email OTP & Phone OTP
+        String emailOtp = String.format("%06d", new Random().nextInt(1000000));
+        String phoneOtp = String.format("%06d", new Random().nextInt(1000000));
 
-        // Send real email in background
-        emailService.sendVerificationEmail(user.getEmail(), otp);
+        redisTemplate.opsForValue().set("otp:email:" + user.getEmail(), emailOtp, Duration.ofMinutes(10));
+        redisTemplate.opsForValue().set("otp:phone:" + user.getEmail(), phoneOtp, Duration.ofMinutes(10));
+        
+        log.info("--- [BEAUTYFLOW Verification OTPs for {}: Email={} Phone={}] ---", user.getEmail(), emailOtp, phoneOtp);
+
+        // Send real email and SMS in background
+        emailService.sendVerificationEmail(user.getEmail(), emailOtp);
+        if (user.getPhoneNumber() != null && !user.getPhoneNumber().trim().isEmpty()) {
+            smsService.sendVerificationSms(user.getPhoneNumber(), phoneOtp);
+        }
 
         String token = jwtUtils.generateToken(user.getEmail(), user.getRole().name());
         String refreshToken = jwtUtils.generateRefreshToken(user.getEmail());
@@ -86,7 +93,10 @@ public class AuthServiceImpl implements AuthService {
         }
 
         if (user.getStatus() == UserStatus.PENDING) {
-            throw new BadRequestException("Email not verified. Please verify your email first.");
+            String verifyMsg = "Account not fully verified. ";
+            if (!user.isEmailVerified()) verifyMsg += "Please verify your email. ";
+            if (!user.isPhoneVerified() && user.getPhoneNumber() != null) verifyMsg += "Please verify your phone.";
+            throw new BadRequestException(verifyMsg.trim());
         }
 
         if (user.getStatus() == UserStatus.SUSPENDED) {
@@ -130,31 +140,68 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public boolean verifyOtp(VerifyOtpRequest request) {
-        String savedOtp = redisTemplate.opsForValue().get("otp:" + request.getEmail());
+        String savedOtp = redisTemplate.opsForValue().get("otp:email:" + request.getEmail());
         if (savedOtp == null || !savedOtp.equals(request.getOtp())) {
-            throw new BadRequestException("Invalid or expired OTP");
+            throw new BadRequestException("Invalid or expired Email OTP");
         }
 
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if (user.getStatus() == UserStatus.PENDING) {
-            user.setStatus(UserStatus.ACTIVE);
-            userRepository.save(user);
+        if (!user.isEmailVerified()) {
+            user.setEmailVerified(true);
+            redisTemplate.delete("otp:email:" + request.getEmail());
 
-            // Create Wallet upon account activation
-            Wallet wallet = Wallet.builder()
-                    .user(user)
-                    .balance(BigDecimal.ZERO)
-                    .currency("INR")
-                    .build();
-            walletRepository.save(wallet);
-
-            redisTemplate.delete("otp:" + request.getEmail());
+            // If phone is also verified (or no phone number is registered), activate account
+            boolean requiresPhoneVerification = user.getPhoneNumber() != null && !user.getPhoneNumber().trim().isEmpty();
+            if (!requiresPhoneVerification || user.isPhoneVerified()) {
+                activateUserAccount(user);
+            } else {
+                userRepository.save(user);
+            }
             return true;
         }
-
         return false;
+    }
+
+    @Override
+    @Transactional
+    public boolean verifyPhone(VerifyOtpRequest request) {
+        String savedOtp = redisTemplate.opsForValue().get("otp:phone:" + request.getEmail());
+        if (savedOtp == null || !savedOtp.equals(request.getOtp())) {
+            throw new BadRequestException("Invalid or expired Phone OTP");
+        }
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!user.isPhoneVerified()) {
+            user.setPhoneVerified(true);
+            redisTemplate.delete("otp:phone:" + request.getEmail());
+
+            // If email is also verified, activate account
+            if (user.isEmailVerified()) {
+                activateUserAccount(user);
+            } else {
+                userRepository.save(user);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private void activateUserAccount(User user) {
+        user.setStatus(UserStatus.ACTIVE);
+        userRepository.save(user);
+
+        // Create Wallet upon account activation
+        Wallet wallet = Wallet.builder()
+                .user(user)
+                .balance(BigDecimal.ZERO)
+                .currency("INR")
+                .build();
+        walletRepository.save(wallet);
+        log.info("Account fully activated and wallet created for user: {}", user.getEmail());
     }
 
     @Override
@@ -214,6 +261,8 @@ public class AuthServiceImpl implements AuthService {
                     .lastName(lastName != null ? lastName : "User")
                     .role(Role.CUSTOMER) // Default to customer
                     .status(UserStatus.ACTIVE) // Automatically active verified Google user
+                    .emailVerified(true)
+                    .phoneVerified(true)
                     .avatarUrl(pictureUrl)
                     .build();
             userRepository.save(user);
@@ -232,6 +281,8 @@ public class AuthServiceImpl implements AuthService {
             }
             if (user.getStatus() == UserStatus.PENDING) {
                 user.setStatus(UserStatus.ACTIVE);
+                user.setEmailVerified(true);
+                user.setPhoneVerified(true);
                 userRepository.save(user);
             }
         }

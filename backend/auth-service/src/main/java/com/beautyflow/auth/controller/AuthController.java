@@ -42,9 +42,18 @@ public class AuthController {
     public ResponseEntity<ApiResponse<String>> verifyEmail(@Valid @RequestBody VerifyOtpRequest request) {
         boolean verified = authService.verifyOtp(request);
         if (verified) {
-            return ResponseEntity.ok(ApiResponse.success("Account activated successfully"));
+            return ResponseEntity.ok(ApiResponse.success("Email verified successfully"));
         }
-        return ResponseEntity.badRequest().body(ApiResponse.success("Failed to verify account / already verified"));
+        return ResponseEntity.badRequest().body(ApiResponse.success("Failed to verify email / already verified"));
+    }
+
+    @PostMapping("/verify-phone")
+    public ResponseEntity<ApiResponse<String>> verifyPhone(@Valid @RequestBody VerifyOtpRequest request) {
+        boolean verified = authService.verifyPhone(request);
+        if (verified) {
+            return ResponseEntity.ok(ApiResponse.success("Phone verified successfully"));
+        }
+        return ResponseEntity.badRequest().body(ApiResponse.success("Failed to verify phone / already verified"));
     }
 
     @PostMapping("/google")
