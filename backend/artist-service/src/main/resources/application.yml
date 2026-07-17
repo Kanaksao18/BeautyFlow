@@ -12,3 +12,16 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+beautyflow:
+  jwt:
+    secret: dGhlLXNlY3JldC1rZXktZm9yLWJlYXV0eWZsb3ctc2Fhcy0yMDI2LW11c3QtYmUtbGFyZ2UtZW5vdWdoLXRvLWJlLXNhZmU=

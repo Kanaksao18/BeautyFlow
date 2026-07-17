@@ -24,8 +24,8 @@ spring:
   mail:
     host: ${SPRING_MAIL_HOST:smtp.gmail.com}
     port: ${SPRING_MAIL_PORT:587}
-    username: ${SPRING_MAIL_USERNAME:beautyflow.verify@gmail.com}
-    password: ${SPRING_MAIL_PASSWORD:mock_password}
+    username: ${SPRING_MAIL_USERNAME:mock-email@gmail.com}
+    password: ${SPRING_MAIL_PASSWORD:mock-app-password}
     properties:
       mail:
         smtp:
@@ -39,8 +39,8 @@ beautyflow:
     expiration-ms: 86400000 # 24 Hours
     refresh-expiration-ms: 604800000 # 7 Days
   google:
-    client-id: ${GOOGLE_CLIENT_ID:mock-google-client-id-beautyflow-2026}
+    client-id: ${GOOGLE_CLIENT_ID:mock-google-client-id}
   twilio:
     account-sid: ${TWILIO_ACCOUNT_SID:mock-twilio-sid}
     auth-token: ${TWILIO_AUTH_TOKEN:mock-twilio-token}
-    from-number: ${TWILIO_PHONE_NUMBER:+15005550006}
+    from-number: ${TWILIO_PHONE_NUMBER:mock-twilio-number}
